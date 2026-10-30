@@ -231,26 +231,31 @@ class SodioDashboard:
         _check()
 
     def run_in_background(self):
-        """Active le moteur en tâche de fond et ferme le tableau de bord."""
+        """Active le moteur en tache de fond et ferme le tableau de bord."""
         if not self.is_engine_running():
-            vbs_path = os.path.join(BASE_DIR, 'lancer_silencieux.vbs')
-            if os.path.exists(vbs_path):
-                subprocess.Popen(['wscript.exe', vbs_path], cwd=BASE_DIR, shell=True)
-            else:
-                run_script = os.path.join(PYTHON_DIR, 'run.py')
-                subprocess.Popen(['pythonw.exe', run_script], cwd=BASE_DIR, shell=True)
-            time.sleep(0.4)
+            run_script = os.path.join(PYTHON_DIR, 'run.py')
+            pythonw_exe = sys.executable.replace('python.exe', 'pythonw.exe')
+            if not os.path.exists(pythonw_exe):
+                pythonw_exe = 'pythonw.exe'
+            DETACHED_PROCESS = 0x00000008
+            CREATE_NO_WINDOW = 0x08000000
+            subprocess.Popen(
+                [pythonw_exe, run_script],
+                cwd=BASE_DIR,
+                creationflags=DETACHED_PROCESS | CREATE_NO_WINDOW,
+                close_fds=True
+            )
+            time.sleep(0.5)
 
         hk = self.cfg.get('hotkey', 'f4').upper()
-        messagebox.showinfo(
-            "Sodio (Sonic-Audio)",
-            f"✨ Sodio roule désormais en arrière-plan !\n\n"
-            f"• Raccourci actif : Appuyez sur [{hk}] n'importe où pour dicter.\n"
-            f"• Icône : Retrouvez Sodio dans les icônes cachées Windows (près de l'horloge) "
-            f"pour rouvrir ce tableau de bord à tout moment."
+        msg = (
+            f"Sodio roule desormais en arriere-plan !\n\n"
+            f"Raccourci actif : Appuyez sur [{hk}] n'importe ou pour dicter.\n"
+            f"Icone : Retrouvez Sodio dans les icones cachees Windows (pres de l'horloge) "
+            f"pour rouvrir ce tableau de bord a tout moment."
         )
+        messagebox.showinfo("Sodio (Sonic-Audio)", msg)
         self.root.destroy()
-
     def on_close_window(self):
         """Comportement quand l'utilisateur clique sur la croix [X] de la fenêtre."""
         # Si le moteur tourne, fermer la fenêtre le laisse tourner en arrière-plan !
