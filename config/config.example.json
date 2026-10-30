@@ -1,0 +1,8 @@
+﻿{
+   api_key: VOTRE_CLE_GEMINI_AI_STUDIO,
+  model_name: gemini-flash-lite-latest,
+  hotkey: f6,
+  microphone_index: null,
+  audio_feedback: true,
+  save_history: true
+}

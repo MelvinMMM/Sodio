@@ -1,0 +1,32 @@
+# Clé API et secrets personnels
+config/config.json
+
+# Historique des dictées personnelles (confidentiel)
+history/history.json
+history/recordings/
+history/*.wav
+
+# Fichiers d''exécution temporaires
+phoenix_voice.pid
+phoenix_voice.log
+
+# Bytecode Python
+__pycache__/
+*.py[cod]
+*.class
+
+# Environnements virtuels
+venv/
+.venv/
+env/
+
+# Fichiers temporaires Windows & IDE
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+
+sodio.pid
+sodio.log
+history/recordings/*.wav
+*.log

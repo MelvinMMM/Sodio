@@ -1,0 +1,86 @@
+{
+  "termes_metier": [
+    {
+      "terme": "Sodio",
+      "phonetique": [
+        "sodio",
+        "saudio",
+        "sodeo",
+        "so dio"
+      ]
+    },
+    {
+      "terme": "n8n",
+      "phonetique": [
+        "n huit n",
+        "en eight en",
+        "n8",
+        "n 8 n"
+      ]
+    },
+    {
+      "terme": "Firestore",
+      "phonetique": [
+        "fire store",
+        "faïeur store"
+      ]
+    },
+    {
+      "terme": "workflow",
+      "phonetique": [
+        "work flow",
+        "work flows",
+        "workflows"
+      ]
+    },
+    {
+      "terme": "webhook",
+      "phonetique": [
+        "web hook",
+        "web hooks",
+        "oueb hook"
+      ]
+    },
+    {
+      "terme": "LMMS",
+      "phonetique": [
+        "l m m s",
+        "el em em es"
+      ]
+    },
+    {
+      "terme": "VST",
+      "phonetique": [
+        "v s t",
+        "vé esse té"
+      ]
+    }
+  ],
+  "mots_cles_perso": [
+    "Sodio",
+    "Melvin",
+    "Sonic",
+    "Darkspine",
+    "AntiGravity",
+    "Gemini",
+    "Python",
+    "GitHub",
+    "Vercel",
+    "API",
+    "LLM",
+    "STT",
+    "TTS",
+    "prompt",
+    "Docteur",
+    "Gill",
+    "Claire",
+    "Kevin",
+    "Sugawara",
+    "LMMS",
+    "BPM",
+    "Soundworks",
+    "Discord",
+    "despi",
+    "Mateta"
+  ]
+}
