@@ -141,18 +141,24 @@ def create_tray_menu():
     cfg = get_config()
     hotkey = cfg.get('hotkey', 'f4').upper()
     mic_name = get_current_mic_name()
-    api_key = cfg.get('api_key', '').strip()
-    has_valid_key = bool(api_key) and (api_key != 'VOTRE_CLE_GEMINI_AI_STUDIO')
-    key_status = "🔑 Clé Gemini : Configurée" if has_valid_key else "⚠️ Clé Gemini : Manquante"
+    engine = cfg.get('engine', 'local_whisper')
+
+    if engine == 'local_whisper':
+        model_size = cfg.get('local_model_size', 'small').upper()
+        engine_status = f"⚡ Moteur : Whisper {model_size} (Local RTX)"
+    else:
+        api_key = cfg.get('api_key', '').strip()
+        has_valid_key = bool(api_key) and (api_key != 'VOTRE_CLE_GEMINI_AI_STUDIO')
+        engine_status = "☁️ Moteur : Gemini Cloud" if has_valid_key else "⚠️ Gemini : Clé manquante"
 
     return Menu(
         Item("🎛️ Ouvrir Sodio (Tableau de bord)", on_open_dashboard, default=True),
         Menu.SEPARATOR,
         Item(f"⚡ Sodio : Prêt [{hotkey}]", lambda icon, item: None, enabled=False),
         Item(f"🎙️ Micro : {mic_name}", lambda icon, item: None, enabled=False),
-        Item(key_status, lambda icon, item: None, enabled=False),
+        Item(engine_status, lambda icon, item: None, enabled=False),
         Menu.SEPARATOR,
-        Item("🔑 Configurer la Clé API Gemini...", on_change_api_key),
+        Item("⚡ Configurer les Moteurs IA (Whisper / Gemini)...", on_open_dashboard),
         Item("➕ Ajouter un mot au lexique...", on_add_lexique_word),
         Item("⌨️ Changer le raccourci clavier...", on_change_hotkey),
         Item("🎙️ Changer de microphone...", on_change_mic),
@@ -173,14 +179,20 @@ def update_tray_menu():
             _tray_icon.title = f"Sodio (Sonic-Audio) [{hotkey}]"
             _tray_icon.menu = create_tray_menu()
             _tray_icon.update_menu()
+            if not _tray_icon.visible:
+                _tray_icon.visible = True
         except Exception as e:
             print(f"⚠️ Erreur update_tray_menu: {e}")
 
-def run_tray():
+def run_tray(setup_callback=None):
     """Démarre l'icône sur le thread principal pour alimenter la boucle de messages Windows."""
     global _tray_icon
     try:
-        if os.path.exists(ICON_PATH):
+        # Préférer l'icône .ico native Windows multi-tailles si présente
+        ico_candidate = os.path.join(BASE_DIR, 'assets', 'icon.ico')
+        if os.path.exists(ico_candidate):
+            image = Image.open(ico_candidate)
+        elif os.path.exists(ICON_PATH):
             image = Image.open(ICON_PATH).convert('RGBA')
         else:
             image = Image.new('RGBA', (64, 64), color=(157, 78, 221, 255))
@@ -194,8 +206,24 @@ def run_tray():
             f"Sodio (Sonic-Audio) [{hotkey}]",
             menu=create_tray_menu()
         )
+
+        def _setup_wrapper(icon):
+            # Selon la documentation officielle de pystray:
+            # "If you specify a custom setup function, you MUST explicitly set this attribute [visible to True]."
+            # Sans cela, Shell_NotifyIcon(NIM_ADD) n'est jamais appelé et l'icône reste invisible !
+            try:
+                icon.visible = True
+            except Exception as e:
+                print(f"⚠️ [Tray] Erreur activation visible: {e}")
+
+            if setup_callback:
+                try:
+                    setup_callback(icon)
+                except Exception as e:
+                    print(f"⚠️ [Tray] Erreur setup_callback: {e}")
+
         print("Sodio tray icon starting run() loop...")
-        _tray_icon.run()
+        _tray_icon.run(setup=_setup_wrapper)
     except Exception as e:
         print(f"⚠️ [Tray] Erreur icône: {e}")
 

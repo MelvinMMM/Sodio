@@ -13,8 +13,10 @@ import sounddevice as sd
 
 if sys.platform == 'win32':
     try:
-        sys.stdout.reconfigure(encoding='utf-8')
-        sys.stderr.reconfigure(encoding='utf-8')
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
+        if hasattr(sys.stderr, 'reconfigure'):
+            sys.stderr.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
     except Exception:
         pass
 
@@ -58,30 +60,32 @@ def _process_audio_async(wav_bytes, duration):
             hud.show_processing()
         print("⏳ [Traitement] Transcription audio en cours...")
         text, latency = transcriber.transcribe(wav_bytes, duration)
+        active_model = transcriber.get_active_model_name() if transcriber else config.get('model_name', 'whisper-local')
         if text:
             print(f"✨ Transcrit ({duration:.1f}s audio | {latency:.2f}s calcul) : \"{text}\"")
             inject_text(text)
         else:
-            print("⚠️ Aucun texte généré.")
+            print("⚠️ Aucun texte généré (silence ou inintelligible).")
 
         if config.get('save_history', True):
             save_entry(
                 text=text or "[Transcription vide]",
                 duration=duration,
                 latency=latency,
-                model=config.get('model_name', 'gemini-flash-lite-latest'),
-                is_mock=transcriber.is_mock_mode(),
+                model=active_model,
+                is_mock=transcriber.is_mock_mode() if transcriber else False,
                 wav_bytes=wav_bytes
             )
     except Exception as e:
         print(f"❌ Erreur lors de la transcription: {e}")
         play_beep('error')
+        active_model = transcriber.get_active_model_name() if transcriber else 'local_whisper'
         if config.get('save_history', True):
             save_entry(
                 text=f"[Erreur: {str(e)[:40]}]",
                 duration=duration,
                 latency=0.0,
-                model=config.get('model_name', 'gemini-flash-lite-latest'),
+                model=active_model,
                 is_mock=False,
                 wav_bytes=wav_bytes
             )
@@ -92,6 +96,10 @@ def _process_audio_async(wav_bytes, duration):
 def on_hotkey_pressed():
     """Déclenché à chaque appui sur le raccourci (ultra-rapide, non-bloquant)."""
     global is_recording, recorder, transcriber, config, hud
+
+    if recorder is None or transcriber is None:
+        print("⏳ [Sodio] Initialisation des composants en cours, patientez un instant...")
+        return
 
     if not toggle_lock.acquire(blocking=False):
         return
@@ -136,8 +144,11 @@ def reload_configuration(force=False):
     with config_lock:
         try:
             new_cfg = load_config()
-            new_hotkey = new_cfg.get('hotkey', 'f6').strip().lower()
+            new_hotkey = new_cfg.get('hotkey', 'f4').strip().lower()
             new_mic = new_cfg.get('microphone_index')
+            new_engine = new_cfg.get('engine', 'local_whisper')
+            new_local_size = new_cfg.get('local_model_size', 'small')
+            new_device = new_cfg.get('device', 'auto')
             new_api_key = new_cfg.get('api_key', '')
             new_model = new_cfg.get('model_name', 'gemini-flash-lite-latest')
 
@@ -159,9 +170,24 @@ def reload_configuration(force=False):
                 recorder.set_device(new_mic)
                 print(f"🔄 [Live-Reload] Microphone mis à jour : Index [{new_mic}]")
 
-            if force or (config.get('api_key') != new_api_key) or (config.get('model_name') != new_model):
-                transcriber = Transcriber(api_key=new_api_key, model_name=new_model)
-                print(f"🔄 [Live-Reload] Moteur IA synchronisé : {new_model}")
+            # 3. Moteur de transcription IA (Local Whisper ou Gemini)
+            engine_changed = (
+                force or
+                (config.get('engine') != new_engine) or
+                (config.get('local_model_size') != new_local_size) or
+                (config.get('device') != new_device) or
+                (config.get('api_key') != new_api_key) or
+                (config.get('model_name') != new_model)
+            )
+            if engine_changed:
+                transcriber = Transcriber(
+                    engine=new_engine,
+                    local_model_size=new_local_size,
+                    device=new_device,
+                    api_key=new_api_key,
+                    model_name=new_model
+                )
+                print(f"🔄 [Live-Reload] Moteur IA synchronisé : {transcriber.get_active_model_name()}")
 
             if hud is not None: hud.enabled = new_cfg.get('floating_hud', True)
 
@@ -202,46 +228,68 @@ def main():
     global config, recorder, transcriber, hud
 
     config = load_config()
-    mic_idx = config.get('microphone_index')
-    api_key = config.get('api_key', '')
-    model_name = config.get('model_name', 'gemini-flash-lite-latest')
 
-    if not api_key or api_key.strip() in ['VOTRE_CLE_GEMINI_AI_STUDIO', '']:
-        subprocess.Popen(['pythonw.exe', os.path.join(PYTHON_DIR, 'changer_cle_api.py')], cwd=BASE_DIR, shell=True)
+    def _init_in_background(icon):
+        global config, recorder, transcriber, hud
+        try:
+            if icon is not None and hasattr(icon, 'visible') and not icon.visible:
+                icon.visible = True
+            mic_idx = config.get('microphone_index')
+            engine = config.get('engine', 'local_whisper')
+            local_size = config.get('local_model_size', 'small')
+            device = config.get('device', 'auto')
+            api_key = config.get('api_key', '')
+            model_name = config.get('model_name', 'gemini-flash-lite-latest')
 
-    from history_manager import purge_old_recordings
+            # Ne proposer la clé API que si le mode Cloud Gemini est actif sans clé
+            if engine == 'gemini' and (not api_key or api_key.strip() in ['VOTRE_CLE_GEMINI_AI_STUDIO', '']):
+                subprocess.Popen(['pythonw.exe', os.path.join(PYTHON_DIR, 'changer_cle_api.py')], cwd=BASE_DIR, shell=True)
+
+            from history_manager import purge_old_recordings
+            try:
+                purge_old_recordings(hours=24)
+            except Exception:
+                pass
+
+            recorder = AudioRecorder(device_index=mic_idx)
+            transcriber = Transcriber(
+                engine=engine,
+                local_model_size=local_size,
+                device=device,
+                api_key=api_key,
+                model_name=model_name
+            )
+            hud = FloatingHUD(enabled=config.get('floating_hud', True))
+
+            set_reload_callback(lambda: reload_configuration(force=True))
+            reload_configuration(force=False)
+            start_config_watcher()
+            threading.Thread(target=transcriber.warmup, daemon=True).start()
+
+            mic_display = "Défaut Windows"
+            try:
+                active_idx = mic_idx if mic_idx is not None else sd.default.device[0]
+                dev_info = sd.query_devices(active_idx)
+                mic_display = f"[{active_idx}] {dev_info.get('name', 'Micro')}" + (" (Auto)" if mic_idx is None else "")
+            except Exception:
+                mic_display = f"Index [{mic_idx}]" if mic_idx is not None else "Inconnu"
+
+            lex_data = load_lexique()
+            mots_cles = lex_data.get('mots_cles_perso', []) or lex_data.get('mots_cles_phoenix', [])
+            nb_termes = len(lex_data.get('termes_metier', [])) + len(mots_cles)
+            active_engine_label = transcriber.get_active_model_name()
+            print("⚡ SODIO (SONIC-AUDIO) — MICRO-AGENT VOCAL DE MELVIN")
+            print(f"• Raccourci : [{current_hotkey.upper()}] (Sonic-Toggle ⚡) | Micro : {mic_display}")
+            print(f"• Lexique   : {nb_termes} termes | HUD : {'Activé (Aura Sonic) 🟣' if config.get('floating_hud', True) else 'Désactivé'}")
+            print(f"• Moteur    : {'⚡ ' + active_engine_label.upper() if not transcriber.is_mock_mode() else '⚠️ SIMULATION'}")
+            print(f"👉 Appuyez sur [{current_hotkey.upper()}] dans n'importe quel logiciel pour dicter.\n")
+
+            update_tray_menu()
+        except Exception as e:
+            print(f"❌ [Main] Erreur initialisation Sodio: {e}")
+
     try:
-        purge_old_recordings(hours=24)
-    except Exception:
-        pass
-
-    recorder = AudioRecorder(device_index=mic_idx)
-    transcriber = Transcriber(api_key=api_key, model_name=model_name)
-    hud = FloatingHUD(enabled=config.get('floating_hud', True))
-
-    set_reload_callback(lambda: reload_configuration(force=True))
-    reload_configuration(force=True)
-    start_config_watcher()
-    threading.Thread(target=transcriber.warmup, daemon=True).start()
-
-    mic_display = "Défaut Windows"
-    try:
-        active_idx = mic_idx if mic_idx is not None else sd.default.device[0]
-        dev_info = sd.query_devices(active_idx)
-        mic_display = f"[{active_idx}] {dev_info.get('name', 'Micro')}" + (" (Auto)" if mic_idx is None else "")
-    except Exception:
-        mic_display = f"Index [{mic_idx}]" if mic_idx is not None else "Inconnu"
-
-    lex_data = load_lexique()
-    mots_cles = lex_data.get('mots_cles_perso', []) or lex_data.get('mots_cles_phoenix', [])
-    nb_termes = len(lex_data.get('termes_metier', [])) + len(mots_cles)
-    print("⚡ SODIO (SONIC-AUDIO) — MICRO-AGENT VOCAL DE MELVIN")
-    print(f"• Raccourci : [{current_hotkey.upper()}] (Sonic-Toggle ⚡) | Micro : {mic_display}")
-    print(f"• Lexique   : {nb_termes} termes | HUD : {'Activé (Aura Sonic) 🟣' if config.get('floating_hud', True) else 'Désactivé'}")
-    print(f"• Moteur    : {'⚡ ' + transcriber.model_name.upper() if not transcriber.is_mock_mode() else '⚠️ SIMULATION'}")
-    print(f"👉 Appuyez sur [{current_hotkey.upper()}] dans n'importe quel logiciel pour dicter.\n")
-    try:
-        run_tray()
+        run_tray(setup_callback=_init_in_background)
     except KeyboardInterrupt:
         print("\nArrêt demandé.")
     finally:

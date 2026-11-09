@@ -1,6 +1,7 @@
 """
-Module de configuration pour Phoenix Voice.
+Module de configuration pour Sodio (Sonic-Audio).
 Gère le chargement, la validation et l'assistant de configuration dans config/config.json.
+Prend en charge le moteur Local Whisper (ultra-rapide) et Google Gemini Cloud.
 """
 import os
 import json
@@ -13,6 +14,9 @@ CONFIG_PATH = os.path.join(CONFIG_DIR, 'config.json')
 EXAMPLE_CONFIG_PATH = os.path.join(CONFIG_DIR, 'config.example.json')
 
 DEFAULT_CONFIG = {
+    'engine': 'local_whisper',          # 'local_whisper' (Recommandé) ou 'gemini'
+    'local_model_size': 'small',        # 'tiny', 'base', 'small', 'medium'
+    'device': 'auto',                   # 'auto' (GPU NVIDIA RTX CUDA si dispo, sinon CPU), 'cuda', 'cpu'
     'api_key': '',
     'model_name': 'gemini-flash-lite-latest',
     'hotkey': 'f4',
@@ -40,7 +44,7 @@ def get_available_microphones():
 
 def run_onboarding_wizard():
     print("\n======================================================")
-    print("  🎙️ BIENVENUE DANS PHOENIX VOICE - CONFIGURATION INITIALE")
+    print("  🎙️ BIENVENUE DANS SODIO (SONIC-AUDIO) - CONFIGURATION")
     print("======================================================")
     print("Ce petit assistant va configurer votre micro et votre raccourci.\n")
 
@@ -65,17 +69,19 @@ def run_onboarding_wizard():
         except ValueError:
             print("❌ Veuillez entrer un nombre valide.")
 
-    hotkey_input = input("\n👉 Choisissez votre raccourci clavier (ex: ctrl+m, f8, alt+space) [Défaut: ctrl+m] : ").strip()
-    selected_hotkey = hotkey_input if hotkey_input else "ctrl+m"
-
-    api_key_input = input("\n👉 Clé API Gemini (optionnelle pour tester, Entrée pour passer) : ").strip()
+    hotkey_input = input("\n👉 Choisissez votre raccourci clavier (ex: f4, ctrl+m, f8) [Défaut: f4] : ").strip()
+    selected_hotkey = hotkey_input if hotkey_input else "f4"
 
     config = {
-        "api_key": api_key_input,
-        "model_name": "gemini-3.5-flash",
+        "engine": "local_whisper",
+        "local_model_size": "small",
+        "device": "auto",
+        "api_key": "",
+        "model_name": "gemini-flash-lite-latest",
         "hotkey": selected_hotkey,
         "microphone_index": selected_mic,
-        "audio_feedback": True,
+        "audio_feedback": False,
+        "floating_hud": True,
         "save_history": True
     }
 

@@ -78,18 +78,105 @@ def build_general_tab(parent, cfg, save_fn):
 
 def build_keys_tab(parent, cfg, save_fn):
     frame = tk.Frame(parent, bg='#090511', padx=20, pady=15)
-    tk.Label(frame, text="Moteurs IA & Clé API Google Gemini", font=("Segoe UI", 13, "bold"), fg=TEXT_MAIN, bg='#090511').pack(anchor='w', pady=(0, 10))
+    tk.Label(frame, text="Moteurs de Transcription IA", font=("Segoe UI", 13, "bold"), fg=TEXT_MAIN, bg='#090511').pack(anchor='w', pady=(0, 6))
     
-    card = tk.Frame(frame, bg=BG_CARD, highlightbackground=BORDER_COLOR, highlightthickness=1, padx=14, pady=12)
-    card.pack(fill='x', pady=5)
-    tk.Label(card, text="Clé API Gemini Personnelle (Google AI Studio)", font=("Segoe UI", 10, "bold"), fg=ACCENT_GOLD, bg=BG_CARD).pack(anchor='w')
+    # 1. Sélection du moteur actif (Local vs Cloud)
+    card_engine = tk.Frame(frame, bg=BG_CARD, highlightbackground=BORDER_COLOR, highlightthickness=1, padx=14, pady=10)
+    card_engine.pack(fill='x', pady=5)
+    tk.Label(card_engine, text="Mode de Transcription Actif", font=("Segoe UI", 10, "bold"), fg=ACCENT_GOLD, bg=BG_CARD).pack(anchor='w', pady=(0, 4))
+    
+    engine_var = tk.StringVar(value=cfg.get('engine', 'local_whisper'))
+    
+    def on_engine_change():
+        cfg['engine'] = engine_var.get()
+        save_fn(cfg)
+        update_engine_panels()
+    
+    r_local = tk.Radiobutton(card_engine, text="⚡ Local Whisper (Instantané & Privé — Façon Super Whisper)", 
+                             variable=engine_var, value='local_whisper', command=on_engine_change,
+                             bg=BG_CARD, fg=TEXT_MAIN, selectcolor='#090511', activebackground=BG_CARD, activeforeground=TEXT_MAIN, font=("Segoe UI", 10, "bold"))
+    r_local.pack(anchor='w', pady=2)
+    
+    r_cloud = tk.Radiobutton(card_engine, text="☁️ Google Gemini Cloud (API multimodale distante)", 
+                             variable=engine_var, value='gemini', command=on_engine_change,
+                             bg=BG_CARD, fg=TEXT_MAIN, selectcolor='#090511', activebackground=BG_CARD, activeforeground=TEXT_MAIN, font=("Segoe UI", 10))
+    r_cloud.pack(anchor='w', pady=2)
+
+    # 2. Panneau LOCAL WHISPER
+    card_local = tk.Frame(frame, bg=BG_CARD, highlightbackground=ACCENT_VIOLET, highlightthickness=1, padx=14, pady=10)
+    card_local.pack(fill='x', pady=6)
+    
+    tk.Label(card_local, text="⚡ Configuration Whisper Local (Sur votre PC)", font=("Segoe UI", 10, "bold"), fg=ACCENT_GOLD, bg=BG_CARD).pack(anchor='w')
+    
+    # Détection matérielle
+    has_cuda = False
+    try:
+        import ctranslate2
+        has_cuda = ctranslate2.get_cuda_device_count() > 0
+    except Exception:
+        pass
+    hw_text = "🟢 Accélération NVIDIA GeForce RTX 2050 (CUDA) active" if has_cuda else "ℹ️ Mode Processeur AMD Ryzen (INT8)"
+    tk.Label(card_local, text=hw_text, font=("Segoe UI", 9, "italic"), fg='#00FF87' if has_cuda else TEXT_MUTED, bg=BG_CARD).pack(anchor='w', pady=(2, 6))
+
+    whisper_models = ['small', 'base', 'tiny', 'medium']
+    whisper_notes = {
+        'small': "🎯 Recommandé : Excellente précision en français & réponse en < 0.4s",
+        'base': "⚡ Équilibré : Très rapide (~0.2s) et léger en mémoire",
+        'tiny': "🚀 Ultra-rapide : Vitesse maximale (~0.1s), pour dictées simples",
+        'medium': "🔬 Haute fidélité : Vocabulaire complexe et longs discours"
+    }
+    cur_whisper = cfg.get('local_model_size', 'small')
+    whisper_var = tk.StringVar(value=cur_whisper if cur_whisper in whisper_models else 'small')
+    
+    row_wh = tk.Frame(card_local, bg=BG_CARD)
+    row_wh.pack(fill='x', pady=4)
+    tk.Label(row_wh, text="Taille du modèle : ", font=("Segoe UI", 9), fg=TEXT_MAIN, bg=BG_CARD).pack(side='left')
+    cb_whisper = ttk.Combobox(row_wh, textvariable=whisper_var, values=whisper_models, state='readonly', width=12)
+    cb_whisper.pack(side='left', padx=6)
+    
+    lbl_wh_note = tk.Label(card_local, text=whisper_notes.get(whisper_var.get(), ""), font=("Segoe UI", 8), fg=ACCENT_VIOLET, bg=BG_CARD)
+    lbl_wh_note.pack(anchor='w', pady=(2, 6))
+    
+    def on_whisper_change(e=None):
+        cfg['local_model_size'] = whisper_var.get()
+        lbl_wh_note.config(text=whisper_notes.get(whisper_var.get(), ""))
+        save_fn(cfg)
+    cb_whisper.bind('<<ComboboxSelected>>', on_whisper_change)
+    
+    wh_status_lbl = tk.Label(card_local, text="", font=("Segoe UI", 9), bg=BG_CARD)
+    wh_status_lbl.pack(anchor='w')
+    
+    def test_local_speed():
+        wh_status_lbl.config(text="⏳ Test de transcription locale en cours...", fg=TEXT_MUTED)
+        frame.update_idletasks()
+        try:
+            import numpy as np, time
+            from transcriber import Transcriber
+            t = Transcriber(engine='local_whisper', local_model_size=whisper_var.get())
+            fake_audio = np.zeros(16000, dtype=np.float32)
+            t0 = time.time()
+            list(t.local_model.transcribe(fake_audio, language='fr', vad_filter=False)[0])
+            elapsed = time.time() - t0
+            wh_status_lbl.config(text=f"✅ Moteur local ultra-rapide validé en {elapsed*1000:.1f} ms !", fg=ACCENT_GOLD)
+        except Exception as ex:
+            wh_status_lbl.config(text=f"❌ Erreur test: {str(ex)[:60]}", fg='#FF5577')
+            
+    btn_wh_test = tk.Button(card_local, text="⚡ Tester la vitesse locale", command=test_local_speed, bg='#241438', fg=TEXT_MAIN, activebackground=ACCENT_VIOLET, activeforeground='#FFFFFF', relief='flat', padx=10, pady=3, font=("Segoe UI", 9))
+    btn_wh_test.pack(anchor='w', pady=(4, 2))
+
+    # 3. Panneau CLOUD GEMINI
+    card_gemini = tk.Frame(frame, bg=BG_CARD, highlightbackground=BORDER_COLOR, highlightthickness=1, padx=14, pady=10)
+    card_gemini.pack(fill='x', pady=6)
+    tk.Label(card_gemini, text="☁️ Configuration Google Gemini (Cloud)", font=("Segoe UI", 10, "bold"), fg=ACCENT_GOLD, bg=BG_CARD).pack(anchor='w')
+    
     key_var = tk.StringVar(value=cfg.get('api_key', ''))
-    entry = tk.Entry(card, textvariable=key_var, show='•', bg='#090511', fg=TEXT_MAIN, insertbackground=ACCENT_GOLD, relief='flat', highlightbackground=BORDER_COLOR, highlightthickness=1, font=("Segoe UI", 10))
-    entry.pack(fill='x', pady=(6, 8))
+    entry = tk.Entry(card_gemini, textvariable=key_var, show='•', bg='#090511', fg=TEXT_MAIN, insertbackground=ACCENT_GOLD, relief='flat', highlightbackground=BORDER_COLOR, highlightthickness=1, font=("Segoe UI", 10))
+    entry.pack(fill='x', pady=(6, 6))
     
-    status_lbl = tk.Label(card, text="", font=("Segoe UI", 9), bg=BG_CARD)
-    status_lbl.pack(anchor='w', pady=(0, 6))
-    row_btn = tk.Frame(card, bg=BG_CARD)
+    gem_status_lbl = tk.Label(card_gemini, text="", font=("Segoe UI", 9), bg=BG_CARD)
+    gem_status_lbl.pack(anchor='w', pady=(0, 4))
+    
+    row_btn = tk.Frame(card_gemini, bg=BG_CARD)
     row_btn.pack(fill='x')
     
     def toggle_show():
@@ -100,47 +187,47 @@ def build_keys_tab(parent, cfg, save_fn):
     btn_show.pack(side='left', padx=(0, 8))
 
     def test_key():
-        status_lbl.config(text="⏳ Test de connexion en cours...", fg=TEXT_MUTED)
+        gem_status_lbl.config(text="⏳ Test de connexion Google en cours...", fg=TEXT_MUTED)
         frame.update_idletasks()
         try:
             from google import genai
             client = genai.Client(api_key=key_var.get().strip())
             r = client.models.generate_content(model='gemini-flash-lite-latest', contents='ping')
             if r and r.text:
-                status_lbl.config(text="✅ Connexion réussie à Google Gemini !", fg=ACCENT_GOLD)
+                gem_status_lbl.config(text="✅ Connexion réussie à Google Gemini !", fg=ACCENT_GOLD)
                 cfg['api_key'] = key_var.get().strip()
                 save_fn(cfg)
         except Exception as ex:
-            status_lbl.config(text=f"❌ Erreur: {str(ex)[:60]}", fg='#FF5577')
+            gem_status_lbl.config(text=f"❌ Erreur: {str(ex)[:60]}", fg='#FF5577')
     
-    btn_test = tk.Button(row_btn, text="⚡ Tester la connexion", command=test_key, bg=ACCENT_VIOLET, fg='#FFFFFF', activebackground=ACCENT_GOLD, activeforeground='#000000', relief='flat', padx=12, pady=3, font=("Segoe UI", 9, "bold"))
+    btn_test = tk.Button(row_btn, text="Tester la clé Gemini", command=test_key, bg='#241438', fg=TEXT_MAIN, relief='flat', padx=10, pady=3, font=("Segoe UI", 9))
     btn_test.pack(side='left')
 
-    # Modèle IA
-    c_m = tk.Frame(frame, bg=BG_CARD, highlightbackground=BORDER_COLOR, highlightthickness=1, padx=14, pady=10)
-    c_m.pack(fill='x', pady=8)
-    tk.Label(c_m, text="Moteur IA par défaut (Transcription)", font=("Segoe UI", 10, "bold"), fg=ACCENT_GOLD, bg=BG_CARD).pack(anchor='w')
-    models_list = [
-        'gemini-flash-lite-latest',
-        'gemini-3.5-flash-lite',
-        'gemini-3-flash-preview'
-    ]
-    model_notes = {
-        'gemini-flash-lite-latest': "⚡ Recommandé : Production stable mondiale & latence < 1s",
-        'gemini-3.5-flash-lite': "🚀 Vitesse max : N°1 Artificial Analysis (224 tok/s)",
-        'gemini-3-flash-preview': "🔬 Expérimental : Dernière génération Gemini 3"
-    }
+    models_list = ['gemini-flash-lite-latest', 'gemini-3.5-flash-lite', 'gemini-3-flash-preview']
     cur_mod = cfg.get('model_name', 'gemini-flash-lite-latest')
     mod_var = tk.StringVar(value=cur_mod if cur_mod in models_list else models_list[0])
-    cb_mod = ttk.Combobox(c_m, textvariable=mod_var, values=models_list, state='readonly', width=32)
-    cb_mod.pack(anchor='w', pady=(5, 3))
-    note_lbl = tk.Label(c_m, text=model_notes.get(mod_var.get(), ""), font=("Segoe UI", 8), fg=ACCENT_VIOLET, bg=BG_CARD)
-    note_lbl.pack(anchor='w')
+    
+    row_mod = tk.Frame(card_gemini, bg=BG_CARD)
+    row_mod.pack(fill='x', pady=(8, 2))
+    tk.Label(row_mod, text="Modèle Gemini : ", font=("Segoe UI", 9), fg=TEXT_MAIN, bg=BG_CARD).pack(side='left')
+    cb_mod = ttk.Combobox(row_mod, textvariable=mod_var, values=models_list, state='readonly', width=26)
+    cb_mod.pack(side='left', padx=6)
+    
     def on_mod(e=None):
         cfg['model_name'] = mod_var.get()
-        note_lbl.config(text=model_notes.get(mod_var.get(), ""))
         save_fn(cfg)
     cb_mod.bind('<<ComboboxSelected>>', on_mod)
+
+    def update_engine_panels():
+        active = engine_var.get()
+        if active == 'local_whisper':
+            card_local.config(highlightbackground=ACCENT_VIOLET, highlightthickness=2)
+            card_gemini.config(highlightbackground=BORDER_COLOR, highlightthickness=1)
+        else:
+            card_gemini.config(highlightbackground=ACCENT_VIOLET, highlightthickness=2)
+            card_local.config(highlightbackground=BORDER_COLOR, highlightthickness=1)
+
+    update_engine_panels()
     return frame
 
 def build_lexique_tab(parent):

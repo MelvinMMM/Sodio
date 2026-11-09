@@ -10,7 +10,9 @@
 
 Micro-agent Windows souverain et ultra-rapide de dictee vocale, taille sur-mesure pour **Melvin**.
 
-Propulse par l'API multimodale **Google Gemini Flash-Lite**, Sodio capture votre voix directement en memoire vive (RAM) et colle instantanement le texte retranscrit et ponctue dans n'importe quel logiciel en **moins de 1,2 seconde**.
+Propulse par un double moteur d'intelligence artificielle :
+1. **Local Sonic Whisper (Par defaut) :** Execution 100% locale sur la machine (acceleration GPU NVIDIA CUDA ou CPU INT8 via `faster-whisper`), garantissant une reponse instantanee (< 0.5s), zero latence reseau, zero quota et une confidentialite absolue hors-ligne.
+2. **Google Gemini Flash-Lite :** Moteur cloud multimodal connecte pour utilisation distante ou fallback.
 
 * **Portfolio :** [https://melvinmateta.netlify.app/](https://melvinmateta.netlify.app/)
 * **Auteur :** Melvin Mateta
@@ -19,11 +21,11 @@ Propulse par l'API multimodale **Google Gemini Flash-Lite**, Sodio capture votre
 
 ## Caracteristiques Principales
 
-* **Vitesse Sonic :** Traitement in-memory ultra-rapide (~1,2 s pour 15s de voix).
-* **100% Gratuit :** Fonctionne directement sur le quota personnel gratuit de Google AI Studio.
+* **Vitesse Instantanee :** Traitement in-memory ultra-rapide (< 0.4s sur GPU NVIDIA RTX 2050 CUDA).
+* **100% Souverain & Hors-Ligne :** Aucune dependance aux serveurs distants en mode local Whisper.
 * **Sonic-Toggle :** Declenchement instantane via raccourci global (par defaut `F4` ou personnalisable) sans voler le focus de votre fenetre active.
-* **Aura HUD Flottant :** Mini-badge discret affichant un point dore (enregistrement) et une lueur violette (traitement IA).
-* **Lexique Personnel :** Retranscription sans faille de vos termes de code, musique (LMMS, VST, Soundworks), IA et projets personnels.
+* **Aura HUD Flottant :** Mini-badge discret affichant l'etat d'enregistrement et de traitement IA.
+* **Lexique Personnel :** Retranscription sans faille de vos termes de code, musique (LMMS, VST, Soundworks), IA et projets personnels avec amorcage Whisper.
 * **Tableau de Bord Integre :** Interface Dark OLED aux accents Violet Electrique (`#9D4EDD`) et Anneaux d'Or (`#FFD700`).
 * **Historique Local (24h) :** Reecoutez vos dictees, relancez une retranscription ou copiez en un clic. Purge automatique quotidienne des flux audio.
 
@@ -32,7 +34,8 @@ Propulse par l'API multimodale **Google Gemini Flash-Lite**, Sodio capture votre
 ## Stack Technique
 
 * **Langage & Runtime :** Python 3.10+ (compatible `pythonw.exe` pour execution furtive en arriere-plan).
-* **Intelligence Artificielle :** Google Gemini Flash-Lite multimodal (`google-genai` / REST API).
+* **Intelligence Artificielle Locale :** `faster-whisper` (CTranslate2, CUDA 12, CuDNN 9, INT8 / FP16).
+* **Intelligence Artificielle Cloud :** Google Gemini Flash-Lite multimodal (`google-genai` / REST API).
 * **Audio & Capture :** `sounddevice` (enregistrement in-memory 16 kHz mono), `scipy` / `wave` (traitement WAV sans ecriture disque initiale).
 * **Interface Graphique :** `customtkinter` / `tkinter` (interface Dark OLED moderne), `pystray` / `Pillow` (System Tray Windows).
 * **Interactions Windows :** `keyboard` (hook global low-level non-bloquant), `pyperclip` & simulation frappe clavier pour injection directe.

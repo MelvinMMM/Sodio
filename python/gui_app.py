@@ -237,13 +237,9 @@ class SodioDashboard:
             pythonw_exe = sys.executable.replace('python.exe', 'pythonw.exe')
             if not os.path.exists(pythonw_exe):
                 pythonw_exe = 'pythonw.exe'
-            DETACHED_PROCESS = 0x00000008
-            CREATE_NO_WINDOW = 0x08000000
             subprocess.Popen(
                 [pythonw_exe, run_script],
-                cwd=BASE_DIR,
-                creationflags=DETACHED_PROCESS | CREATE_NO_WINDOW,
-                close_fds=True
+                cwd=BASE_DIR
             )
             time.sleep(0.5)
 
